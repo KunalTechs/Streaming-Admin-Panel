@@ -184,3 +184,49 @@ export const logout = async (req, res) => {
     res.status(500).json({ message: "Logout failed", error: error.message });
   }
 };
+
+// Get current logged-in admin's profile
+export const getProfile = async (req, res) => {
+  try {
+    // 1. req.admin was attached by the 'protect' middleware
+    // We fetch the admin by ID and use .select("-password") for security
+    const admin = await Admin.findById(req.admin.id).select("-password");
+
+    // 2. Check if admin still exists in the database
+    if (!admin) {
+      return res.status(404).json({
+        success: false,
+        message: "Admin not found",
+      });
+    }
+
+    // 3. Return the profile data
+    res.status(200).json({
+      success: true,
+      data: admin,
+    });
+  } catch (error) {
+    console.error("Profile Fetch Error:", error.message);
+    res.status(500).json({
+      success: false,
+      message: "Server error while fetching profile",
+      error: error.message,
+    });
+  }
+};
+
+// GET ALLADMIN PROFILE BY SUPERADMIN
+export const getAllAdmins = async (req, res) => {
+    try {
+        // Find everyone but EXCLUDE passwords for security
+        const admins = await Admin.find().select("-password").sort("-createdAt");
+
+        res.status(200).json({
+            success: true,
+            results: admins.length,
+            data: admins
+        });
+    } catch (error) {
+        res.status(500).json({ message: "Error fetching admins", error: error.message });
+    }
+};
