@@ -1,12 +1,13 @@
-import Admin from "../models/Admin.js"; // Updated to Admin
+import Admin from "../models/Admin.js"; 
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
-import RefreshToken from "../models/RefreshToken.js";
+import RefreshToken from "../models/Refreshtokens.js";
 
 const generateToken = (userId) => {
   return jwt.sign({ id: userId }, process.env.JWT_SECRET, { expiresIn: "1h" });
 };
 
+// Restricted to superAdmin :-
 //REGISTER NEW ADMIN
 export const register = async (req, res) => {
   try {
@@ -48,11 +49,89 @@ export const register = async (req, res) => {
   }
 };
 
+// GET ALLADMIN PROFILE BY SUPERADMIN
+export const getAllAdmins = async (req, res) => {
+    try {
+        // Find everyone but EXCLUDE passwords for security
+        const admins = await Admin.find().select("-password").sort("-createdAt");
+
+        res.status(200).json({
+            success: true,
+            results: admins.length,
+            data: admins
+        });
+    } catch (error) {
+        res.status(500).json({ message: "Error fetching admins", error: error.message });
+    }
+};
+
+//Delete Admin By SuperAdmin
+export const deleteAdmin = async (req,res) =>{
+try{
+  const {id} = req.params;
+
+  // Prevent deleting yourself
+  if(id === req.admin.id){
+    return res.status(400).json({message:"You cannot delte your own account"});
+  }
+
+    const targetAdmin = await Admin.findById(id);
+
+    if(!targetAdmin) {
+      return res.status(404).json({message:"Admin not found"});
+    }
+
+    if(targetAdmin.role == "superadmin"){
+      return res.status(403).json({
+        message:"Superadmin accounts cannot be deleted through this endpoint"
+      });
+    }
+
+    await Admin.findByIdAndDelete(id);
+res.status(200).json({ 
+            success: true, 
+            message: `Account for ${targetAdmin.name} has been permanently deleted` 
+        });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    } 
+
+}
+
+export const updateAdminRole = async (req,res) =>{
+  try{
+  const {id} = req.params;
+  const {role}=req.body;
+
+  const validRoles = ["admin","editor","superadmin"];
+  if(!validRoles.includes(role)){
+    return res.status(400).json({message: "Invalid role type"});
+  }
+
+  if(role === "superadmin"){
+    return res.status(403).json({message:"Promotion to Superadmin is restricted to system level operations"})
+  }
+
+  const updateAdmin = await Admin.findByIdAndUpdate(id,{role},{new:true,runValidators:true}).select("-password");
+
+  if(!updateAdmin){
+    return res.status(404).json({message: "Admin not found"});
+  }
+
+  res.status(200).json({
+            success: true,
+            message: `Role updated to ${role} for ${updatedAdmin.name}`,
+            data: updatedAdmin
+        });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+
+
+// done by both admin superadmin:-
 // ADMIN LOGIN
-import crypto from "crypto";
-import jwt from "jsonwebtoken";
-import Admin from "../models/Admin.js";
-import RefreshToken from "../models/RefreshToken.js";
 
 export const login = async (req, res) => {
   try {
@@ -172,11 +251,19 @@ export const handleRefreshToken = async (req, res) => {
 // LOGOUT ADMIN
 export const logout = async (req, res) => {
   try {
-    // Clear the cookie by setting its expiry to a past date
-    res.cookie("jwt", "", {
-      httpOnly: true,
-      expires: new Date(0), // Expire immediately
-      sameSite: "Strict",
+    const { refreshToken } = req.cookies;
+
+    // 1. Delete Refresh Token from DB
+    if (refreshToken) {
+      await RefreshToken.deleteOne({ token: refreshToken });
+    }
+
+    // 2. Clear both cookies
+    res.clearCookie("jwt", { httpOnly: true, sameSite: "Strict" });
+    res.clearCookie("refreshToken", { 
+        httpOnly: true, 
+        sameSite: "Strict", 
+        path: "/api/auth/refresh-token" 
     });
 
     res.status(200).json({ message: "Logged out successfully" });
@@ -215,18 +302,46 @@ export const getProfile = async (req, res) => {
   }
 };
 
-// GET ALLADMIN PROFILE BY SUPERADMIN
-export const getAllAdmins = async (req, res) => {
-    try {
-        // Find everyone but EXCLUDE passwords for security
-        const admins = await Admin.find().select("-password").sort("-createdAt");
 
-        res.status(200).json({
-            success: true,
-            results: admins.length,
-            data: admins
-        });
-    } catch (error) {
-        res.status(500).json({ message: "Error fetching admins", error: error.message });
-    }
+
+// UpdateProfile by Admin:-
+export const updateProfile = async (req, res) => {
+  try {
+    const { name, email } = req.body;
+
+    const updatedAdmin = await Admin.findByIdAndUpdate(
+      req.admin.id, 
+      { name, email },
+      { new: true, runValidators: true }
+    ).select("-password");
+
+    res.status(200).json({ success: true, data: updatedAdmin });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
 };
+
+//UpdatePassword by admin:-
+
+export const updatePassword = async(req,res) =>{
+  try {
+    const {oldPassword, newPassword} = req.body;
+
+    const admin = await Admin.findById(req.admin.id).select("+password");
+
+    const isMatch= await admin.comparePassword(oldPassword);
+    if(!isMatch) {
+      return res.status(401).json({message: "Current password is incorrect"});
+       }
+
+    //  Update and save (Schema middleware will hash the new password)
+      admin.password = newPassword;
+      await admin.save();
+
+      res.status(200).json({success:true, message:"Password updated successfully"});
+  } catch (error) {
+     res.status(500).json({message: error.message});
+  }
+
+}
+
