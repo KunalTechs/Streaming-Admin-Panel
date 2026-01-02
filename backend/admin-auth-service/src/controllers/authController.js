@@ -2,6 +2,7 @@ import Admin from "../models/Admin.js";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
 import RefreshToken from "../models/Refreshtokens.js";
+import { emitEvent } from "../events/producer.js";
 
 const generateToken = (userId) => {
   return jwt.sign({ id: userId }, process.env.JWT_SECRET, { expiresIn: "1h" });
@@ -24,6 +25,23 @@ export const register = async (req, res) => {
 
     // CREATE NEW ADMIN (Password hashing happens automatically in Admin.js pre-save hook)
     const newAdmin = await Admin.create({ name, email, password, role });
+
+
+    //Broadcast to Kafka
+    try {
+       await emitEvent("admin-events", newAdmin._id,{
+      type: "ADMIN_CREATED",
+      payload:{
+        id:newAdmin._id,
+        email:newAdmin.email,
+        role:newAdmin.role,
+        createdAt:newAdmin.createdAt
+      }
+    }); 
+    } catch (error) {
+      console.error(" Kafka brodcast failed, but admin was saved",kafka.message)
+    }
+   
 
     const token = generateToken(newAdmin._id);
 
@@ -88,6 +106,12 @@ try{
     }
 
     await Admin.findByIdAndDelete(id);
+
+    // ✅ KAFKA INTEGRATION: Sync Delete
+    await emitEvent("admin-events",id,{
+      type:"ADMIN_DELETED",
+      payload:{id,email:targetAdmin.email}
+    })
 res.status(200).json({ 
             success: true, 
             message: `Account for ${targetAdmin.name} has been permanently deleted` 
@@ -98,6 +122,7 @@ res.status(200).json({
 
 }
 
+// Update admin Role
 export const updateAdminRole = async (req,res) =>{
   try{
   const {id} = req.params;
@@ -117,6 +142,12 @@ export const updateAdminRole = async (req,res) =>{
   if(!updateAdmin){
     return res.status(404).json({message: "Admin not found"});
   }
+
+  // ✅ KAFKA INTEGRATION: Sync Role Change
+  await emitEvent("admin-events",id,{
+    type:"ADMIM_ROLE_UPDATE",
+    payload:{id,role:updateAdmin.role}
+  });
 
   res.status(200).json({
             success: true,
@@ -141,8 +172,19 @@ export const login = async (req, res) => {
     const admin = await Admin.findOne({ email }).select("+password");
     
     if (!admin || !(await admin.comparePassword(password))) {
+      //Log Failed Attempt 
+      await emitEvent("audit-logs",email,{
+        type: "LOGIN_FAILURE",
+        details: {email, ip:req.ip, reason: "Invalid Credentails"}
+      });
       return res.status(401).json({ message: "Invalid email or password" });
     }
+
+    //Log Success
+    await emitEvent("audit-logs", admin._id,{
+      type: "LOGIN_SUCCESS",
+      details:{adminId:admin._id,email:admin.email}
+    })
 
     // 2. Generate Access Token with THE MAGIC LINE (include role)
     const accessToken = jwt.sign(
@@ -314,6 +356,12 @@ export const updateProfile = async (req, res) => {
       { name, email },
       { new: true, runValidators: true }
     ).select("-password");
+
+    // ✅ KAFKA INTEGRATION: Sync Profile Data
+    await emitEvent("admin-events",req.admin.id,{
+      type: "ADMIN_UPDATED",
+      payload: {id: req.admin.id,name,email}
+    });
 
     res.status(200).json({ success: true, data: updatedAdmin });
   } catch (error) {
