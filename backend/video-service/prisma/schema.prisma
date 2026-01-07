@@ -1,0 +1,37 @@
+// 1. Data Source: Connects to  Docker MySQL
+datasource db {
+  provider = "mysql"
+}
+
+// 2. Generator: Creates the JS code use in controllers
+generator client {
+  provider = "prisma-client-js"
+}
+
+// 3. Admin Model (This data will be synced via Kafka)
+model Admin {
+  id        String   @id // The ID from MongoDB
+  username  String   @unique
+  email     String   @unique
+  videos    Video[]  // Relationship: One Admin can have many videos
+  createdAt DateTime @default(now())
+}
+
+// 4. Video Model
+model Video {
+  id           String   @id @default(uuid())
+  title        String
+  description  String?  @db.Text
+  videoUrl     String
+  thumbnailUrl String?
+  isProcessed  Boolean  @default(false)
+  
+  // Link back to the Admin
+  author       Admin    @relation(fields: [authorId], references: [id])
+  authorId     String
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([authorId]) // Speed up searches for "Videos by this Admin"
+}
