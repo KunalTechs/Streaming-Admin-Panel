@@ -5,4 +5,4 @@ const kafka =new Kafka({
     brokers:[process.env.KAFKA_BROKER],
 });
 
-export const cosumer = kafka.consumer({groupId: "video-service-group"});
+export const consumer = kafka.consumer({groupId: "video-service-group"});
