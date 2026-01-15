@@ -31,4 +31,4 @@ adminSchema.methods.comparePassword =function (password){
     return bcrypt.compareSync(password, this.password)
 }
 
-export default mongoose.model("Admin",adminSchema);
+export default mongoose.model("Admin",adminSchema, "admins");
