@@ -28,19 +28,17 @@ export const register = async (req, res) => {
 
 
     //Broadcast to Kafka
-    try {
-       await emitEvent("admin-events", newAdmin._id,{
-      type: "ADMIN_CREATED",
-      payload:{
-        id:newAdmin._id,
-        email:newAdmin.email,
-        role:newAdmin.role,
-        createdAt:newAdmin.createdAt
-      }
-    }); 
-    } catch (error) {
-      console.error(" Kafka brodcast failed, but admin was saved",kafka.message)
-    }
+   try {
+  // We send ONLY what the Video Service needs for its MySQL Admin table
+  await emitEvent("ADMIN_CREATED", newAdmin._id.toString(), {
+      id: newAdmin._id.toString(),
+      username: newAdmin.name, 
+      email: newAdmin.email
+  });
+  console.log("🚀 Sync event sent to ADMIN_CREATED topic");
+} catch (error) {
+  console.error("Kafka Sync Error:", error.message);
+}
    
 
     const token = generateToken(newAdmin._id);
