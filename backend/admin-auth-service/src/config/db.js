@@ -1,7 +1,6 @@
 import mongoose from "mongoose";
 
 const connectDB = async () => {
-    // 1. Setup listeners first
     mongoose.connection.on("connected", () => {
         console.log("✅ Database connected successfully");
     });
@@ -11,25 +10,17 @@ const connectDB = async () => {
     });
 
     try {
-        let mongodbURI = process.env.MONGODB_URI;
-        const serviceName = 'Admin-Auth';
+        const mongodbURI = process.env.MONGODB_URI;
 
         if (!mongodbURI) {
             throw new Error("MONGODB_URI environment variable not set");
         }
 
-        // Clean trailing slash
-        if (mongodbURI.endsWith('/')) {
-            mongodbURI = mongodbURI.slice(0, -1);
-        }
-
-        // FIX: Ensure variable names match and use template literals correctly
-        // Note: If your URI doesn't have a DB name, this creates one called 'Admin-Auth'
-        await mongoose.connect(`${mongodbURI}/${serviceName}`);
+        await mongoose.connect(mongodbURI);
         
     } catch (error) {
         console.error("Critical Error Connecting to MongoDB:", error.message);
-        process.exit(1); // Optional: Exit process if DB connection is mandatory
+        process.exit(1); 
     }
 }
 
