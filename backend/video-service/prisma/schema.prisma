@@ -1,13 +1,12 @@
 // 1. Data Source: Connects to  Docker MySQL
 datasource db {
   provider = "mysql"
+  url      = env("DATABASE_URL")
 }
 
 // 2. Generator: Creates the JS code use in controllers
 generator client {
   provider   = "prisma-client-js"
-  engineType      = "client"            // 👈 Mandatory when using an adapter
-  previewFeatures = ["driverAdapters"]
 }
 
 // 3. Admin Model (This data will be synced via Kafka)
