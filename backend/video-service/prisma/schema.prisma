@@ -23,16 +23,25 @@ model Video {
   id           String   @id @default(uuid())
   title        String
   description  String?  @db.Text
-  videoUrl     String
+  url          String   // Original file link
+  hlsUrl       String?  // Link to processed stream (.m3u8)
+  filename     String   
   thumbnailUrl String?
   isProcessed  Boolean  @default(false)
-  
-  // Link back to the Admin
+  status       Status   @default(PENDING)
+  views        Int      @default(0)
   author       Admin    @relation(fields: [authorId], references: [id])
   authorId     String
 
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  @@index([authorId]) // Speed up searches for "Videos by this Admin"
+  @@index([authorId])
+}
+
+enum Status {
+  PENDING
+  PROCESSING
+  READY
+  FAILED
 }
