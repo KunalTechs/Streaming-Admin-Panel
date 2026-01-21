@@ -1,4 +1,4 @@
-import jwt from 'jasonwebtoken';
+import jwt from 'jsonwebtoken';
 
 export const verifyToken = (req,res,next) =>{
     //get token from cookie
@@ -14,6 +14,15 @@ export const verifyToken = (req,res,next) =>{
         next();
 
     } catch (error) {
-        res.status(403).json({error: "Invalid or Epired Token"});
+        res.status(403).json({error: "Invalid or Expired Token"});
+    }
+};
+
+export const isSuperAdmin = (req, res, next) => {
+    // verifyToken runs first, so req.user is already populated
+    if (req.user && req.user.role === 'SUPERADMIN') {
+        next(); // Allow access
+    } else {
+        res.status(403).json({ error: "Permission Denied. SuperAdmin access required." });
     }
 };
