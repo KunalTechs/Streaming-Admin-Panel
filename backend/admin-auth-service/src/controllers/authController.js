@@ -1,4 +1,4 @@
-import Admin from "../models/Admin.js"; 
+import Admin from "../models/Admin.js";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
 import RefreshToken from "../models/Refreshtokens.js";
@@ -20,26 +20,34 @@ export const register = async (req, res) => {
     }
 
     if (password.length < 8) {
-      return res.status(400).json({ message: "Password must be at least 8 characters long" });
+      return res
+        .status(400)
+        .json({ message: "Password must be at least 8 characters long" });
     }
 
     // CREATE NEW ADMIN (Password hashing happens automatically in Admin.js pre-save hook)
     const newAdmin = await Admin.create({ name, email, password, role });
 
-
     //Broadcast to Kafka
-   try {
-  // We send ONLY what the Video Service needs for its MySQL Admin table
-  await emitEvent("ADMIN_CREATED", newAdmin._id.toString(), {
-      id: newAdmin._id.toString(),
-      username: newAdmin.name, 
-      email: newAdmin.email
-  });
-  console.log("🚀 Sync event sent to ADMIN_CREATED topic");
-} catch (error) {
-  console.error("Kafka Sync Error:", error.message);
-}
-   
+    try {
+      // We send ONLY what the Video Service needs for its MySQL Admin table
+      await emitEvent("ADMIN_CREATED", newAdmin._id.toString(), {
+        id: newAdmin._id.toString(),
+        username: newAdmin.name,
+        email: newAdmin.email,
+      });
+
+      // for admin-event
+      await emitEvent("admin-events", {
+        event: "ADMIN_REGISTERED",
+        actor: "System",
+        target: newAdmin._id,
+        details: `Admin ${newAdmin.name} self-registered`,
+      });
+      console.log("🚀 Sync event sent to ADMIN_CREATED topic");
+    } catch (error) {
+      console.error("Kafka Sync Error:", error.message);
+    }
 
     const token = generateToken(newAdmin._id);
 
@@ -56,10 +64,9 @@ export const register = async (req, res) => {
         id: newAdmin._id,
         name: newAdmin.name,
         email: newAdmin.email,
-        role: newAdmin.role
-      }
+        role: newAdmin.role,
+      },
     });
-
   } catch (error) {
     res.status(500).json({ message: "Server error", error: error.message });
   }
@@ -67,97 +74,122 @@ export const register = async (req, res) => {
 
 // GET ALLADMIN PROFILE BY SUPERADMIN
 export const getAllAdmins = async (req, res) => {
-    try {
-        // Find everyone but EXCLUDE passwords for security
-        const admins = await Admin.find().select("-password").sort("-createdAt");
+  try {
+    // Find everyone but EXCLUDE passwords for security
+    const admins = await Admin.find().select("-password").sort("-createdAt");
 
-        res.status(200).json({
-            success: true,
-            results: admins.length,
-            data: admins
-        });
-    } catch (error) {
-        res.status(500).json({ message: "Error fetching admins", error: error.message });
-    }
+    res.status(200).json({
+      success: true,
+      results: admins.length,
+      data: admins,
+    });
+  } catch (error) {
+    res
+      .status(500)
+      .json({ message: "Error fetching admins", error: error.message });
+  }
 };
 
 //Delete Admin By SuperAdmin
-export const deleteAdmin = async (req,res) =>{
-try{
-  const {id} = req.params;
+export const deleteAdmin = async (req, res) => {
+  try {
+    const { adminIdToDelete } = req.params;
+    const { transferToId } = req.body;
 
-  // Prevent deleting yourself
-  if(id === req.admin.id){
-    return res.status(400).json({message:"You cannot delte your own account"});
-  }
-
-    const targetAdmin = await Admin.findById(id);
-
-    if(!targetAdmin) {
-      return res.status(404).json({message:"Admin not found"});
+    // Prevent deleting yourself
+    if (adminIdToDelete === req.admin.id) {
+      return res
+        .status(400)
+        .json({ message: "You cannot delte your own account" });
     }
 
-    if(targetAdmin.role == "superadmin"){
+    const targetAdmin = await Admin.findById(adminIdToDelete);
+
+    if (!targetAdmin) {
+      return res.status(404).json({ message: "Admin not found" });
+    }
+
+    if (targetAdmin.role == "superadmin") {
       return res.status(403).json({
-        message:"Superadmin accounts cannot be deleted through this endpoint"
+        message: "Superadmin accounts cannot be deleted through this endpoint",
       });
     }
 
-    await Admin.findByIdAndDelete(id);
+    await Admin.findByIdAndDelete(adminIdToDelete);
 
     // ✅ KAFKA INTEGRATION: Sync Delete
-    await emitEvent("admin-events",id,{
-      type:"ADMIN_DELETED",
-      payload:{id,email:targetAdmin.email}
-    })
-res.status(200).json({ 
-            success: true, 
-            message: `Account for ${targetAdmin.name} has been permanently deleted` 
-        });
-    } catch (error) {
-        res.status(500).json({ message: error.message });
-    } 
+    await emitEvent("ADMIN_DELETED", {
+      messages: [
+        {
+          value: JSON.stringify({
+            deletedAdminId: adminIdToDelete,
+            newOwnerId: transferToId || null,
+          }),
+        },
+      ],
+    });
 
+    // for admin-event
+    await emitEvent("admin-events", {
+      event: "ADMIN_DELETED",
+      actor: req.admin.id, // The SuperAdmin who did it
+      target: adminIdToDelete,
+      reason: reason || "No reason provided",
+    });
+
+    res.status(200).json({
+      success: true,
+      message: `Account for ${targetAdmin.name} has been permanently deleted / transfer initiated`,
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
 }
 
+
 // Update admin Role
-export const updateAdminRole = async (req,res) =>{
-  try{
-  const {id} = req.params;
-  const {role}=req.body;
+export const updateAdminRole = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { role } = req.body;
 
-  const validRoles = ["admin","editor","superadmin"];
-  if(!validRoles.includes(role)){
-    return res.status(400).json({message: "Invalid role type"});
-  }
-
-  if(role === "superadmin"){
-    return res.status(403).json({message:"Promotion to Superadmin is restricted to system level operations"})
-  }
-
-  const updateAdmin = await Admin.findByIdAndUpdate(id,{role},{new:true,runValidators:true}).select("-password");
-
-  if(!updateAdmin){
-    return res.status(404).json({message: "Admin not found"});
-  }
-
-  // ✅ KAFKA INTEGRATION: Sync Role Change
-  await emitEvent("admin-events",id,{
-    type:"ADMIM_ROLE_UPDATE",
-    payload:{id,role:updateAdmin.role}
-  });
-
-  res.status(200).json({
-            success: true,
-            message: `Role updated to ${role} for ${updatedAdmin.name}`,
-            data: updatedAdmin
-        });
-    } catch (error) {
-        res.status(500).json({ message: error.message });
+    const validRoles = ["admin", "editor", "superadmin"];
+    if (!validRoles.includes(role)) {
+      return res.status(400).json({ message: "Invalid role type" });
     }
+
+    if (role === "superadmin") {
+      return res.status(403).json({
+        message:
+          "Promotion to Superadmin is restricted to system level operations",
+      });
+    }
+
+    const updateAdmin = await Admin.findByIdAndUpdate(
+      id,
+      { role },
+      { new: true, runValidators: true },
+    ).select("-password");
+
+    if (!updateAdmin) {
+      return res.status(404).json({ message: "Admin not found" });
+    }
+
+    // ✅ KAFKA INTEGRATION: Sync Role Change
+    await emitEvent("admin-events", id, {
+      type: "ADMIN_ROLE_UPDATE",
+      payload: { id, role: updateAdmin.role },
+    });
+
+    res.status(200).json({
+      success: true,
+      message: `Role updated to ${role} for ${updatedAdmin.name}`,
+      data: updatedAdmin,
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
 };
-
-
 
 // done by both admin superadmin:-
 // ADMIN LOGIN
@@ -168,30 +200,30 @@ export const login = async (req, res) => {
 
     // 1. Find Admin and include password for comparison
     const admin = await Admin.findOne({ email }).select("+password");
-    
+
     if (!admin || !(await admin.comparePassword(password))) {
-      //Log Failed Attempt 
-      await emitEvent("audit-logs",email,{
+      //Log Failed Attempt
+      await emitEvent("audit-logs", email, {
         type: "LOGIN_FAILURE",
-        details: {email, ip:req.ip, reason: "Invalid Credentails"}
+        details: { email, ip: req.ip, reason: "Invalid Credentails" },
       });
       return res.status(401).json({ message: "Invalid email or password" });
     }
 
     //Log Success
-    await emitEvent("audit-logs", admin._id,{
+    await emitEvent("audit-logs", admin._id, {
       type: "LOGIN_SUCCESS",
-      details:{adminId:admin._id,email:admin.email}
-    })
+      details: { adminId: admin._id, email: admin.email },
+    });
 
     // 2. Generate Access Token with THE MAGIC LINE (include role)
     const accessToken = jwt.sign(
-      { 
-        id: admin._id, 
-        role: admin.role // This allows other services to know permissions instantly
-      }, 
-      process.env.JWT_SECRET, 
-      { expiresIn: '1h' }
+      {
+        id: admin._id,
+        role: admin.role, // This allows other services to know permissions instantly
+      },
+      process.env.JWT_SECRET,
+      { expiresIn: "1h" },
     );
 
     // 3. Set Access Token Cookie
@@ -200,7 +232,7 @@ export const login = async (req, res) => {
       secure: process.env.NODE_ENV === "production",
       sameSite: "Strict",
       maxAge: 3600000, // 1 hour
-      path: "/"
+      path: "/",
     });
 
     // 4. Generate Refresh Token Value (Using Crypto)
@@ -210,7 +242,7 @@ export const login = async (req, res) => {
     await RefreshToken.create({
       adminId: admin._id,
       token: refreshTokenValue,
-      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 Days
+      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 Days
     });
 
     // 6. Set Refresh Token Cookie (Restricted Path for Security)
@@ -218,8 +250,8 @@ export const login = async (req, res) => {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "Strict",
-      path: "/api/auth/refresh-token", 
-      maxAge: 7 * 24 * 60 * 60 * 1000 
+      path: "/api/auth/refresh-token",
+      maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
     // 7. Send Response (Return basic info to the Frontend)
@@ -229,10 +261,9 @@ export const login = async (req, res) => {
         id: admin._id,
         name: admin.name,
         email: admin.email,
-        role: admin.role // Useful for UI conditional rendering
-      }
+        role: admin.role, // Useful for UI conditional rendering
+      },
     });
-
   } catch (error) {
     console.error("Login Error:", error);
     res.status(500).json({ message: "Server error", error: error.message });
@@ -241,51 +272,54 @@ export const login = async (req, res) => {
 
 // HANDLE REFRESH TOKEN
 export const handleRefreshToken = async (req, res) => {
-    try {
-        const { refreshToken } = req.cookies;
+  try {
+    const { refreshToken } = req.cookies;
 
-        if (!refreshToken) {
-            return res.status(401).json({ message: "Refresh Token required" });
-        }
-
-        // 1. Find token in DB
-        const savedToken = await RefreshToken.findOne({ token: refreshToken });
-
-        if (!savedToken) {
-            return res.status(403).json({ message: "Invalid or Expired Refresh Token" });
-        }
-
-        // 2. EXTRA SECURITY: Verify the Admin still exists
-        const admin = await Admin.findById(savedToken.adminId);
-        if (!admin) {
-            // If admin is gone, clean up the orphaned refresh token
-            await RefreshToken.deleteOne({ _id: savedToken._id });
-            return res.status(403).json({ message: "User no longer exists" });
-        }
-
-        // 3. Generate new Access Token (The 1-hour key)
-        const newAccessToken = jwt.sign(
-            { id: admin._id, role: admin.role }, // Include role for easier frontend access
-            process.env.JWT_SECRET, 
-            { expiresIn: "1h" }
-        );
-
-        // 4. Update the Access Token Cookie
-        res.cookie("jwt", newAccessToken, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === "production",
-            sameSite: "Strict",
-            maxAge: 3600000 // 1 Hour
-        });
-
-        res.status(200).json({ 
-            message: "Access Token Refreshed",
-            role: admin.role // Send role back so frontend knows permissions
-        });
-
-    } catch (error) {
-        res.status(500).json({ message: "Internal Server Error", error: error.message });
+    if (!refreshToken) {
+      return res.status(401).json({ message: "Refresh Token required" });
     }
+
+    // 1. Find token in DB
+    const savedToken = await RefreshToken.findOne({ token: refreshToken });
+
+    if (!savedToken) {
+      return res
+        .status(403)
+        .json({ message: "Invalid or Expired Refresh Token" });
+    }
+
+    // 2. EXTRA SECURITY: Verify the Admin still exists
+    const admin = await Admin.findById(savedToken.adminId);
+    if (!admin) {
+      // If admin is gone, clean up the orphaned refresh token
+      await RefreshToken.deleteOne({ _id: savedToken._id });
+      return res.status(403).json({ message: "User no longer exists" });
+    }
+
+    // 3. Generate new Access Token (The 1-hour key)
+    const newAccessToken = jwt.sign(
+      { id: admin._id, role: admin.role }, // Include role for easier frontend access
+      process.env.JWT_SECRET,
+      { expiresIn: "1h" },
+    );
+
+    // 4. Update the Access Token Cookie
+    res.cookie("jwt", newAccessToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "Strict",
+      maxAge: 3600000, // 1 Hour
+    });
+
+    res.status(200).json({
+      message: "Access Token Refreshed",
+      role: admin.role, // Send role back so frontend knows permissions
+    });
+  } catch (error) {
+    res
+      .status(500)
+      .json({ message: "Internal Server Error", error: error.message });
+  }
 };
 
 // LOGOUT ADMIN
@@ -300,10 +334,10 @@ export const logout = async (req, res) => {
 
     // 2. Clear both cookies
     res.clearCookie("jwt", { httpOnly: true, sameSite: "Strict" });
-    res.clearCookie("refreshToken", { 
-        httpOnly: true, 
-        sameSite: "Strict", 
-        path: "/api/auth/refresh-token" 
+    res.clearCookie("refreshToken", {
+      httpOnly: true,
+      sameSite: "Strict",
+      path: "/api/auth/refresh-token",
     });
 
     res.status(200).json({ message: "Logged out successfully" });
@@ -342,23 +376,21 @@ export const getProfile = async (req, res) => {
   }
 };
 
-
-
 // UpdateProfile by Admin:-
 export const updateProfile = async (req, res) => {
   try {
     const { name, email } = req.body;
 
     const updatedAdmin = await Admin.findByIdAndUpdate(
-      req.admin.id, 
+      req.admin.id,
       { name, email },
-      { new: true, runValidators: true }
+      { new: true, runValidators: true },
     ).select("-password");
 
     // ✅ KAFKA INTEGRATION: Sync Profile Data
-    await emitEvent("admin-events",req.admin.id,{
+    await emitEvent("admin-events", req.admin.id, {
       type: "ADMIN_UPDATED",
-      payload: {id: req.admin.id,name,email}
+      payload: { id: req.admin.id, name, email },
     });
 
     res.status(200).json({ success: true, data: updatedAdmin });
@@ -369,25 +401,25 @@ export const updateProfile = async (req, res) => {
 
 //UpdatePassword by admin:-
 
-export const updatePassword = async(req,res) =>{
+export const updatePassword = async (req, res) => {
   try {
-    const {oldPassword, newPassword} = req.body;
+    const { oldPassword, newPassword } = req.body;
 
     const admin = await Admin.findById(req.admin.id).select("+password");
 
-    const isMatch= await admin.comparePassword(oldPassword);
-    if(!isMatch) {
-      return res.status(401).json({message: "Current password is incorrect"});
-       }
+    const isMatch = await admin.comparePassword(oldPassword);
+    if (!isMatch) {
+      return res.status(401).json({ message: "Current password is incorrect" });
+    }
 
     //  Update and save (Schema middleware will hash the new password)
-      admin.password = newPassword;
-      await admin.save();
+    admin.password = newPassword;
+    await admin.save();
 
-      res.status(200).json({success:true, message:"Password updated successfully"});
+    res
+      .status(200)
+      .json({ success: true, message: "Password updated successfully" });
   } catch (error) {
-     res.status(500).json({message: error.message});
+    res.status(500).json({ message: error.message });
   }
-
-}
-
+};
