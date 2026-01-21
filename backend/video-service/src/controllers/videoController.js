@@ -79,3 +79,42 @@ export const updateVideo = async (req,res) =>{
         res.status(500).json({error: "Update failed"});
     }
 };
+
+export const getVideos = async (req,res) =>{
+  try {
+    const { id: adminId, role } = req.user;
+    const {page =1, limit =10, search=""} = req.query;
+
+    const queryFilter = {
+      title: { contains: search },
+      ...(role !== 'SUPERADMIN' && { authorId: adminId }) 
+    };
+
+    const videos =await prisma.findMany({
+      where: queryFilter,
+      take: parseInt(limit),// Limit results
+      skip: (page-1)* limit,
+    include: {
+        author: {
+          select: { username: true, email: true } // SuperAdmin can see who uploaded what
+        }
+      },
+      orderBy: {createdAt: 'desc'}
+    });
+
+    const total = await prisma.video.count({ where: queryFilter });
+
+    res.json({
+      videos,
+      pagination: {
+        total,
+        page: parseInt(page),
+        pages: Math.ceil(total / limit)
+      }
+    });
+  } catch (error) {
+    res.status(500).json({error: "failed to fetch videos"});
+  }
+}
+
+
