@@ -1,8 +1,8 @@
 import express from "express";
 import multer from "multer";
 import path from "path";
-import {deleteVideo, updateVideo, uploadVideo} from "../controllers/videoController.js";
-import { verifyToken } from "../middleware/verifyToken.js";
+import {deleteVideo, getVideos, updateVideo, uploadVideo} from "../controllers/videoController.js";
+import { isSuperAdmin, verifyToken } from "../middleware/verifyToken.js";
 
 
 const router = express.Router();
@@ -21,10 +21,13 @@ const upload = multer({storage});
 router.post("/upload",verifyToken, upload.single("video"), uploadVideo);
 
 //for delete video
-router.delete('/:id',verifyToken, deleteVideo);
+router.delete('/:id',verifyToken,isSuperAdmin, deleteVideo);
 
 //for update video
 router.put('/:id',verifyToken, updateVideo);
+
+//for admin get its own videos
+router.get('/', verifyToken, getVideos);
 export default router;
 
 
