@@ -1,26 +1,41 @@
 
 services:
   kafka:
-    image: apache/kafka:latest
+    image: ${KAFKA_IMAGE}
     container_name: kafka-kraft
     ports:
-      - "9092:9092"
+      - "${KAFKA_PORT}:${KAFKA_PORT}"
     environment:
-      # KRaft Mode settings
-      - KAFKA_NODE_ID=1
+      - KAFKA_NODE_ID=${KAFKA_NODE_ID}
       - KAFKA_PROCESS_ROLES=broker,controller
       - KAFKA_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093
-      - KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://localhost:9092
+      - KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://localhost:${KAFKA_PORT}
       - KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER
       - KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
-      - KAFKA_CONTROLLER_QUORUM_VOTERS=1@localhost:9093
+      - KAFKA_CONTROLLER_QUORUM_VOTERS=${KAFKA_NODE_ID}@localhost:${KAFKA_CONTROLLER_PORT}
       - KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1
       - KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=1
       - KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=1
-      - KAFKA_NUM_PARTITIONS=3
+      - KAFKA_NUM_PARTITIONS=${KAFKA_NUM_PARTITIONS}
     volumes:
       - kafka_data:/var/lib/kafka/data
 
+  mysql:
+    image: ${MYSQL_IMAGE}
+    container_name: mysql-db
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    ports:
+      - "${MYSQL_EXTERNAL_PORT}:3306"
+    volumes:
+      - mysql_simple_data:/var/lib/mysql
+
 volumes:
   kafka_data:
+    driver: local
+  mysql_simple_data:
     driver: local
