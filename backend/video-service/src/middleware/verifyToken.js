@@ -20,7 +20,7 @@ export const verifyToken = (req,res,next) =>{
 
 export const isSuperAdmin = (req, res, next) => {
     // verifyToken runs first, so req.user is already populated
-    if (req.user && req.user.role === 'SUPERADMIN') {
+    if (req.user && req.user.role === 'superadmin') {
         next(); // Allow access
     } else {
         res.status(403).json({ error: "Permission Denied. SuperAdmin access required." });
