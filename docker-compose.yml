@@ -1,5 +1,6 @@
 
 services:
+  # 1. Kafka Service
   kafka:
     image: ${KAFKA_IMAGE}
     container_name: kafka-kraft
@@ -20,22 +21,75 @@ services:
     volumes:
       - kafka_data:/var/lib/kafka/data
 
-  mysql:
+  # 2. Existing Video Service DB
+  mysql-video:
     image: ${MYSQL_IMAGE}
-    container_name: mysql-db
+    container_name: mysql-video-db
     restart: always
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
-      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_DATABASE: ${MYSQL_DATABASE_VIDEO}
       MYSQL_USER: ${MYSQL_USER}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD}
     ports:
-      - "${MYSQL_EXTERNAL_PORT}:3306"
+      - "${MYSQL_VIDEO_EXTERNAL_PORT}:3306" # External 3307 maps to internal 3306
     volumes:
-      - mysql_simple_data:/var/lib/mysql
+      - video_db_data:/var/lib/mysql
 
+  # 3. NEW Category Service DB
+  mysql-category:
+    image: ${MYSQL_IMAGE}
+    container_name: mysql-category-db
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE_CATEGORY}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    ports:
+      - "${MYSQL_CATEGORY_EXTERNAL_PORT}:3306" # External 3308 maps to internal 3306
+    volumes:
+      - category_db_data:/var/lib/mysql
+
+  # 4. Redis Service for Category
+  # The Leader
+  redis-master:
+    image: ${REDIS_IMAGE}
+    container_name: redis-master
+    ports:
+      - "${REDIS_PORT}:${REDIS_PORT}"
+      - "8001:8001" #Redis Insight Dashboard
+    volumes:
+      - redis_data:/data
+
+  # The Follower (high Availablity)
+  redis-replica:
+    image: ${REDIS_IMAGE}
+    container_name: redis-replica
+    environment: 
+     REDIS_ARGS: "--replicaof redis-master ${REDIS_PORT}"
+    depends_on:
+     - redis-master
+
+  # The Watcher (Sentinel)
+  redis-sentinel:
+    image: ${REDIS_SENTINEL_IMAGE}
+    container_name: redis-sentinel
+    environment:
+     - REDIS_MASTER_HOST=redis-master
+    ports:
+     - "${REDIS_SENTINEL_PORT}:${REDIS_SENTINEL_PORT}"
+    depends_on:
+     - redis-master
+     - redis-replica
+    
+    
 volumes:
   kafka_data:
     driver: local
-  mysql_simple_data:
+  video_db_data:    
+    driver: local
+  category_db_data:
+    driver: local
+  redis_data:
     driver: local
