@@ -3,6 +3,7 @@ import app from "./app.js";
 import { connectProducer } from "./events/category.producer.js";
 import prisma from "./config/prisma.js";
 import { connectRedis } from "./config/redis.js";
+import { initCategoryTopics } from "./config/kafka.js";
 
 
 const PORT = process.env.PORT;
@@ -12,6 +13,9 @@ const startServer = async () => {
 //connect to prisma
 await prisma.$connect();
  console.log("prisma is running");
+ 
+//Initialize Kafka Topics first
+ await initCategoryTopics();
 
 //Start the Mouth of Kafka
 await connectProducer();
