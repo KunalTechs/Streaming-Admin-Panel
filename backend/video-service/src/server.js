@@ -1,7 +1,8 @@
 import "dotenv/config";
 import app from "./app.js";
 import prisma from "./config/prisma.js";
-import { initAdminConsumer } from "./events/admin.consumer.js";
+import { initVideoServiceConsumers } from "./events/videoservice.consumers.js";
+
 
 const PORT = process.env.PORT;
 
@@ -12,8 +13,9 @@ const startServer = async () => {
     console.log("prisma is running");
     //Start Kafka Consumer
     // This starts watching for "ADMIN_CREATED" events from the Auth Service
-    await initAdminConsumer();
+    await initVideoServiceConsumers();
     console.log("kafka consumer is running");
+
 
     app.listen(PORT, () => {
       console.log(`Server running on address http://localhost:${PORT}`);
