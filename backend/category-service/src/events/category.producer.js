@@ -8,8 +8,17 @@ export const connectProducer =async () =>{
 };
 
 export const emitCategoryEvent =  async (topic, data) =>{
-    await producer.send({
-        topic,
+    try {
+         await producer.send({
+        topic: 'category-events',
         messages: [{value: JSON.stringify(data)}]
     });
+    console.log(`📡 Kafka Event Emitted: ${event}`);
+    } catch (error) {
+        console.error('❌ Kafka Producer Error:', error);
+    }finally {
+       
+        await producer.disconnect();
+     }
+   
 };
