@@ -6,7 +6,7 @@ import path from 'path';
 //UploadVideo
 export const uploadVideo = async (req, res) => {
   try {
-    const { title, adminId } = req.body;
+    const { title, adminId, categoryId, description } = req.body;
     const file = req.file;
 
     if (!file) {
@@ -17,8 +17,10 @@ export const uploadVideo = async (req, res) => {
     const newVideo = await prisma.video.create({
       data: {
         title: title,
+        description: description || "",
         filename: file.filename,
         url: `/uploads/videos/${file.filename}`,
+        categoryId: categoryId || null, 
         author: {
           connect: { id: adminId.replace(/"/g, "") },
         },
@@ -65,13 +67,14 @@ export const deleteVideo = async (req, res) =>{
 export const updateVideo = async (req,res) =>{
     try {
         const {id} = req.params;
-        const {title, description} = req.body;
+        const {title, description, categoryId} = req.body;
 
         const updatedVideo = await prisma.video.update({
             where: {id},
             data:{
-                title: title?.replace(''),
-                description
+                title: title,
+                description: description,
+                categoryId: categoryId
             }
         })
         res.status(200).json("video update successfully",updatedVideo);
@@ -87,10 +90,11 @@ export const getVideos = async (req,res) =>{
 
     const queryFilter = {
       title: { contains: search },
-      ...(role !== 'SUPERADMIN' && { authorId: adminId }) 
+      ...(role !== 'superadmin' && { authorId: adminId }),
+      ...(categoryId && { categoryId: categoryId}) 
     };
 
-    const videos =await prisma.findMany({
+    const videos =await prisma.video.findMany({
       where: queryFilter,
       take: parseInt(limit),// Limit results
       skip: (page-1)* limit,
