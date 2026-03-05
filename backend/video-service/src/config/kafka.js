@@ -6,3 +6,4 @@ const kafka =new Kafka({
 });
 
 export const consumer = kafka.consumer({groupId: "video-service-group"});
+export const producer = kafka.producer({groupId: "video-service-group"});
