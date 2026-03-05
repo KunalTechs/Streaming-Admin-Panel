@@ -27,6 +27,8 @@ export const uploadVideo = async (req, res) => {
       },
     });
 
+    await emitVideoEvent("VIDEO_UPLOADED", newVideo);
+
     res
       .status(200)
       .json({ message: "video Upload successfully", video: newVideo });
@@ -52,8 +54,12 @@ export const deleteVideo = async (req, res) =>{
             fs.unlinkSync(filePath);
         }
 
+        const videoId = video.id;
+
         //Delete from Database
         await prisma.video.delete({where: {id}});
+
+        await emitVideoEvent("VIDEO_DELETED", { id: videoId });
 
         res.status(200).json({message:"Video Deleted Successfully"});
 
