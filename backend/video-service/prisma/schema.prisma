@@ -16,23 +16,30 @@ model Admin {
 }
 
 model Video {
-  id           String   @id @default(uuid())
-  title        String
-  description  String?  @db.Text
-  url          String
-  hlsUrl       String?
-  filename     String
-  thumbnailUrl String?
-  isProcessed  Boolean  @default(false)
-  status       Status   @default(PENDING)
-  views        Int      @default(0)
-  categoryId   String? // Links to category service via UUId string
-  authorId     String
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  adminDeletedAt   DateTime? //track the deletion date
-  author       Admin    @relation(fields: [authorId], references: [id])
- 
+  id              String    @id @default(uuid())
+  title           String
+  description     String?   @db.Text
+  
+  // Storage paths
+  url             String    // The CloudFront URL for the raw video
+  hlsUrl          String?   // The CloudFront URL for the .m3u8 playlist
+  filename        String    @unique // The S3 Key (e.g., raw-videos/uuid.mp4)
+  thumbnailUrl    String?
+  
+  // Processing state
+  isProcessed     Boolean   @default(false)
+  status          Status    @default(PENDING)
+  views           Int       @default(0)
+  
+  // Microservice Links
+  categoryId      String?   // Link to Category Service ID
+  authorId        String
+  author          Admin     @relation(fields: [authorId], references: [id])
+
+  // Timestamps
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  adminDeletedAt  DateTime? 
 
   @@index([authorId])
   @@index([categoryId])
