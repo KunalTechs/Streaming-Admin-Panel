@@ -6,7 +6,7 @@ export const verifyToken = (req,res,next) =>{
     const token = req.cookies.token;
 
     if(!token) {
-        return res.satatus(401).json({error: "Access Denied. No token found in cookies."})
+        return res.status(401).json({error: "Access Denied. No token found in cookies."})
     }
 
     try {
