@@ -1,4 +1,4 @@
-import { producer } from "../config/kafka";
+import { producer } from "../config/kafka.js";
 
 export const emitVideoEvent = async (event, data) => {
     try {

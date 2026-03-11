@@ -5,7 +5,7 @@ import path from "path";
 //UploadVideo
 export const uploadVideo = async (req, res) => {
   try {
-    const { title, adminId, categoryId, description, fileKey, thumbnailUrl } = req.body;
+    const { title, adminId, categoryId, description, fileKey, thumbnailKey } = req.body;
     
     if(!fileKey){
       return res.status(400).json({error: "No S3 file key provided"});
@@ -35,7 +35,7 @@ export const uploadVideo = async (req, res) => {
 
     await emitVideoEvent("VIDEO_UPLOADED", { 
       videoId: newVideo.id, 
-      fileKey: fileKey,
+      fileKey: newVideo.filename,
       title: newVideo.title 
     });
 
