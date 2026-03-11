@@ -1,4 +1,4 @@
-import { DeleteObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
+import { DeleteObjectCommand, DeleteObjectsCommand, ListObjectsV2Command, PutObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { s3Client } from "../config/s3.js";
 import { v4 as uuidv4 } from "uuid";
@@ -11,7 +11,7 @@ export const generatePresignedUrl = async (req, res) =>{
         if(!fileName || !fileType || !folder){
             return resizeBy.status(400).json({error: "fileName, fileType, and folder are required"})
         }
-        const fileKey = `${folder}/${uuidv4}-${fileName}`;
+        const fileKey = `${folder}/${uuidv4()}-${fileName}`;
 
         const command = new PutObjectCommand({
             Bucket: process.env.AWS_S3_BUCKET,
