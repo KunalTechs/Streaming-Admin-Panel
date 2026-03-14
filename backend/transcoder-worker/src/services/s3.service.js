@@ -1,6 +1,6 @@
 import { GetObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
 import {Upload} from "@aws-sdk/lib-storage";
-import { BUCKET_NAME, s3Client } from "../config/s3.config";
+import { BUCKET_NAME, s3Client } from "../config/s3.config.js";
 import fs from 'fs-extra';
 import path  from "path";
 import {createWriteStream} from "fs";
@@ -31,7 +31,7 @@ export const uploadFolderToS3 = async (localFolderPath, s3FolderPath) =>{
     const files = await fs.readdir(localFolderPath);
 
     const uploadPromises = files.map(async (fileName) =>{
-        const filePath = path.join.map(async (fileName) =>{
+       const filePath = path.join(localFolderPath, fileName);
             const fileStream = fs.createReadStream(filePath);
             s3Key = `${s3FolderPath}/${fileName}`;
 
@@ -47,8 +47,7 @@ export const uploadFolderToS3 = async (localFolderPath, s3FolderPath) =>{
             return parallelUpload.done();
         });
         return Promise.all(uploadPromises);
-    });
-};
+    };
 
 // deletes raw video after transcoding
 export const deleteFileFromS3 = async (s3Key) =>{

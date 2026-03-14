@@ -1,4 +1,4 @@
-import Kafka from 'kafkajs';
+import {Kafka} from 'kafkajs';
 import 'dotenv/config';
 
 const kafka = new Kafka ({
