@@ -82,6 +82,24 @@ services:
     depends_on:
      - redis-master
      - redis-replica
+
+  # 5. ElasticSearxh service
+  elasticsearch:
+    image: ${ELASTICSEARCH_IMAGE}
+    container_name: elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    ports:
+      - "${ELASTICSEARCH_PORT}:${ELASTICSEARCH_PORT}" 
+    volumes:
+      - es_data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s http://localhost:9200/_cluster/health | grep -q 'status.*green\\|status.*yellow'"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     
     
 volumes:
@@ -92,4 +110,6 @@ volumes:
   category_db_data:
     driver: local
   redis_data:
+    driver: local
+  es_data:
     driver: local
