@@ -1,11 +1,13 @@
 import {esClient} from "../config/elasticsearch.js";
+import { VIDEO_INDEX } from "../constants/indexNames.js";
+import { CATEGORY_INDEX } from "../constants/indexNames.js";
 
-const INDEX_NAME = 'videos';
+
 
 export const indexVideo = async (videoData) =>{
     try {
         await esClient.index({
-            index: INDEX_NAME,
+            index: VIDEO_INDEX,
             id: videoData.videoId, // Use videoId as the document ID
             document: {
                 title: videoData.title,
@@ -24,10 +26,23 @@ export const indexVideo = async (videoData) =>{
 
 };
 
+export const indexCategory = async (categoryData) => {
+    await esClient.index({
+        index: CATEGORY_INDEX,
+        id: categoryData.id,
+        document: {
+            name: categoryData.name,
+            slug: categoryData.slug,
+            thumbnailUrl: categoryData.thumbnailUrl,
+            active: true
+        }
+    });
+}
+
 export const deleteVideoFromIndex = async (videoId) =>{
     try {
         await esClient.delete({
-            index: INDEX_NAME,
+            index: VIDEO_INDEX,
             id: videoId,
         });
         console.log(`Video ${videoId} removed from search index.`);
