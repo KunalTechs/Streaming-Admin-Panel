@@ -34,10 +34,18 @@ export const uploadVideo = async (req, res) => {
     });
 
     await emitVideoEvent("VIDEO_UPLOADED", { 
-      videoId: newVideo.id, 
-      fileKey: newVideo.filename,
-      title: newVideo.title 
-    });
+  // For Search Service
+  videoId: newVideo.id, 
+  title: newVideo.title,
+  description: newVideo.description,
+  thumbnailUrl: newVideo.thumbnailUrl,
+  category: newVideo.categoryId,
+  tags: newVideo.tags,
+
+  // For Transcoder & File Service
+  fileKey: newVideo.filename,   // The raw S3 key (e.g., "uploads/raw-123.mp4")
+  adminId: cleanedAdminId,      // Who uploaded it
+});
 
     res
       .status(200)
@@ -68,7 +76,6 @@ export const deleteVideo = async (req, res) => {
       fs.unlinkSync(filePath);
     }
 
-    const videoId = video.id;
 
     //Delete from Database
     await prisma.video.delete({ where: { id } });
@@ -97,8 +104,21 @@ export const updateVideo = async (req, res) => {
         title: title,
         description: description,
         categoryId: categoryId,
+        tags: tags,
       },
     });
+
+    // FAT EVENT: Send everything the Search Service needs to re-index
+    await emitVideoEvent("VIDEO_UPDATED", {
+      videoId: updatedVideo.id,
+      title: updatedVideo.title,
+      description: updatedVideo.description,
+      thumbnailUrl: updatedVideo.thumbnailUrl, // Include this so ES doesn't lose it
+      category: updatedVideo.categoryId,
+      tags: tags || [], // Send current tags
+      updatedAt: updatedVideo.updatedAt
+    });
+
    res.status(200).json({ 
       message: "Video updated successfully", 
       updatedVideo 

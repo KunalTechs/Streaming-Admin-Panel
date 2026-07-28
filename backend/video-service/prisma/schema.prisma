@@ -19,6 +19,7 @@ model Video {
   id              String    @id @default(uuid())
   title           String
   description     String?   @db.Text
+  tags         Json?    @default("[]")
   
   // Storage paths
   url             String    // The CloudFront URL for the raw video

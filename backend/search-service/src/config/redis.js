@@ -1,6 +1,7 @@
-import { createClient } from 'redis';
+import {createClient} from 'redis';
+import 'dotenv/config';
 
-const redisClient = createClient({
+export const redisClient = createClient({
  // Sentinel configuration for HA
     sentinels: [
         {
@@ -11,18 +12,16 @@ const redisClient = createClient({
     name: 'mymaster',
 });
 
-redisClient.on('error', (err) => console.log('❌ Redis Sentinel Error:', err));
+redisClient.on('error',(err) => console.log('❌ Redis Sentinel Error:',err));
 redisClient.on('connect', () => console.log('Connected to Sentinel...'));
 redisClient.on('ready', () => console.log('Redis Master is Ready via Sentinel 🚀'));
 
-export const connectRedis = async () =>{
+export const connectRedis = async () => {
     try {
-        await redisClient.connect();
-        console.log("Redis Stack HA Connect");
-    } catch (err){
-        console.error("Redis Connection Failed:", err)
-
+        redisClient.connect();
+           console.log("Redis Stack HA Connect");
+    } catch (error) {
+        console.error("Redis Connection Failed:", error) 
     }
 }
 
-export default redisClient;
