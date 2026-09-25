@@ -52,3 +52,22 @@ enum Status {
   READY
   FAILED
 }
+
+enum OutboxStatus {
+  PENDING
+  PUBLISHED
+  FAILED
+}
+
+model OutboxEvent {
+  id          String       @id @default(uuid())
+  aggregateId String
+  eventType   String
+  payload     Json
+  status      OutboxStatus @default(PENDING)
+  createdAt   DateTime     @default(now())
+  processedAt DateTime?
+
+  @@index([status, createdAt])
+}
+

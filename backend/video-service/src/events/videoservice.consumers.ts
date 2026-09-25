@@ -1,11 +1,15 @@
 import { consumer } from "../config/kafka.js";
 import prisma from "../config/prisma.js";
 
-const handleAdminDeletion = async (data) => {
+export interface AdminDeletionPayload {
+    deletedAdminId: string;
+    newOwnerId?: string;
+}
+
+const handleAdminDeletion = async (data: AdminDeletionPayload): Promise<void> => {
   const { deletedAdminId, newOwnerId } = data;
 
   if (newOwnerId) {
-    // OPTION A: Reassign to SuperAdmin or a specific New Admin
     try {
       await prisma.video.updateMany({
         where: { authorId: deletedAdminId },
@@ -13,29 +17,28 @@ const handleAdminDeletion = async (data) => {
       });
       console.log(`Videos reassigned to ${newOwnerId}`);
     } catch (error) {
-      (console.warn("delete admin transfer "), error.message);
+      const err = error as Error;
+      console.warn("delete admin transfer error:", err.message);
     }
   } else {
-    // OPTION B: Mark for deletion in 5 days
     try {
       await prisma.video.updateMany({
         where: { authorId: deletedAdminId },
         data: {
-          status: "TRASH",
           adminDeletedAt: new Date(),
         },
       });
       console.log(`Videos marked for deletion after 5 days.`);
     } catch (error) {
-      (console.warn("delete admin content "), error.message);
+      const err = error as Error;
+      console.warn("delete admin content error:", err.message);
     }
   }
 };
 
-export const initVideoServiceConsumers = async () => {
+export const initVideoServiceConsumers = async (): Promise<void> => {
   await consumer.connect();
 
-  // Subscribing to all relevant topics
   await consumer.subscribe({
     topics: [
       "ADMIN_CREATED",
@@ -50,10 +53,10 @@ export const initVideoServiceConsumers = async () => {
 
   await consumer.run({
     eachMessage: async ({ topic, message }) => {
+      if (!message.value) return;
       const payload = JSON.parse(message.value.toString());
 
       try {
-        // --- ADMIN SYNC ---
         if (topic === "ADMIN_CREATED") {
           await prisma.admin.create({
             data: {
@@ -64,13 +67,12 @@ export const initVideoServiceConsumers = async () => {
           });
           console.log(`👤 Admin Synced: ${payload.username}`);
         } else if (topic === "ADMIN_DELETED") {
-          await handleAdminDeletion(payload);
+          await handleAdminDeletion(payload as AdminDeletionPayload);
         }
-
-        // --- CATEGORY SYNC ---
         else if (topic === "category-events") {
-          const { event, data } = payload;
-          if (event === "CATEGORY_DELETED") {
+          const eventName = payload.event || payload.type;
+          const data = payload.data || payload;
+          if (eventName === "CATEGORY_DELETED") {
             await prisma.video.updateMany({
               where: { categoryId: data.id },
               data: { categoryId: null },
@@ -78,29 +80,25 @@ export const initVideoServiceConsumers = async () => {
             console.log(`✅ Unlinked videos from deleted category: ${data.id}`);
           }
         }
-
-        // --- TRANSCODER SYNC (The most important part!) ---
         else if (topic === "video-events") {
-          const { event, data } = payload;
-          if (event === "TRANSCODING_FINISHED") {
+          const eventName = payload.event || payload.type;
+          const data = payload.data || payload;
+          if (eventName === "TRANSCODING_FINISHED") {
             const { videoId, hlsKey } = data;
 
-            console.log(
-              `🎬 Transcoding complete for ${videoId}. Updating URL...`,
-            );
-
-            const hlsUrl = `${process.env.CLOUDFRONT_URL}/${hlsKey}`;
+            console.log(`🎬 Transcoding complete for ${videoId}. Updating URL...`);
+            const hlsUrl = `${process.env.CLOUDFRONT_URL || "http://localhost:9000"}/${hlsKey}`;
 
             await prisma.video.update({
               where: { id: videoId },
               data: {
                 url: hlsUrl,
-                status: "READY", // User can now watch the video!
+                status: "READY",
               },
             });
             console.log(`✅ Video ${videoId} is now LIVE.`);
 
-          } else if (event === "TRANSCODING_FAILED") {
+          } else if (eventName === "TRANSCODING_FAILED") {
             const { videoId, reason } = data;
             console.error(`⚠️ Video ${videoId} failed processing: ${reason}`);
 
@@ -114,19 +112,14 @@ export const initVideoServiceConsumers = async () => {
               });
               console.log(`❌ Updated status to FAILED for video ${videoId}`);
             } catch (dbError) {
-              console.error(
-                "Failed to update failure status in DB:",
-                dbError.message,
-              );
+              const err = dbError as Error;
+              console.error("Failed to update failure status in DB:", err.message);
             }
           }
         }
       } catch (error) {
-        // Log the actual error message so you can debug if Prisma fails
-        console.warn(
-          `⚠️ Sync skipped or failed for topic ${topic}:`,
-          error.message,
-        );
+        const err = error as Error;
+        console.warn(`⚠️ Sync skipped or failed for topic ${topic}:`, err.message);
       }
     },
   });
