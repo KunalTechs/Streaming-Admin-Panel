@@ -5,7 +5,9 @@
   "main": "index.js",
   "type": "module",
   "scripts": {
-    "start": "nodemon index.js"
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsx watch index.ts"
   },
   "keywords": [],
   "author": "",
@@ -16,9 +18,20 @@
     "express": "^5.2.1",
     "helmet": "^8.1.0",
     "http-proxy-middleware": "^3.0.5",
-    "morgan": "^1.10.1"
+    "ioredis": "^6.0.0",
+    "morgan": "^1.10.1",
+    "opossum": "^10.0.0",
+    "rate-limiter-flexible": "^11.2.1"
   },
   "devDependencies": {
-    "nodemon": "^3.1.11"
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/morgan": "^1.9.10",
+    "@types/node": "^26.6.2",
+    "@types/opossum": "^8.1.9",
+    "@types/uuid": "^10.0.0",
+    "nodemon": "^3.1.11",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2"
   }
 }
