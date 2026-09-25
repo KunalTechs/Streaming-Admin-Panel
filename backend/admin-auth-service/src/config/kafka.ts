@@ -3,10 +3,10 @@ import "dotenv/config";
 
 const kafka = new Kafka({
   clientId: "admin-auth-services",
-  brokers: [process.env.KAFKA_BROKER],
+  brokers: [process.env.KAFKA_BROKER || "localhost:9092"],
 });
 
-export const initTopics = async () => {
+export const initTopics = async (): Promise<void> => {
   const admin = kafka.admin();
   try {
     await admin.connect();
@@ -19,13 +19,14 @@ export const initTopics = async () => {
         { topic: "ADMIN_DELETED", numPartitions: 1 },
       ],
     });
-    console.log("Kafka Topics InItialized");
+    console.log("✅ Kafka Topics Initialized");
   } catch (error) {
-    if (!error.message.includes("already exists")) {
-      console.error("Kafka Admin Error", error);
+    const err = error as Error;
+    if (!err.message.includes("already exists")) {
+      console.error("Kafka Admin Error:", err);
     }
   } finally {
-    await admin.disconnect();
+    await admin.disconnect().catch(() => {});
   }
 };
 

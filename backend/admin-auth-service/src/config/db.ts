@@ -1,11 +1,11 @@
 import mongoose from "mongoose";
 
-const connectDB = async () => {
+const connectDB = async (): Promise<void> => {
     mongoose.connection.on("connected", () => {
         console.log("✅ Database connected successfully");
     });
 
-    mongoose.connection.on("error", (err) => {
+    mongoose.connection.on("error", (err: Error) => {
         console.error("❌ MongoDB connection error:", err);
     });
 
@@ -17,11 +17,11 @@ const connectDB = async () => {
         }
 
         await mongoose.connect(mongodbURI);
-        
     } catch (error) {
-        console.error("Critical Error Connecting to MongoDB:", error.message);
-        process.exit(1); 
+        const err = error as Error;
+        console.error("Critical Error Connecting to MongoDB:", err.message);
+        process.exit(1);
     }
-}
+};
 
 export default connectDB;
